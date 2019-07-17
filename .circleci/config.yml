@@ -28,6 +28,40 @@ jobs:
     
     - run: mvn test
 
+  docker-build-push:
+    docker:
+    - image: docker:stable
+      environment:
+        DIST_VERSION: 1.0.0
+
+    working_directory: /tmp/repo
+
+    steps:
+    - run: apk add --no-cache git
+
+    - checkout
+
+    - setup_remote_docker
+
+    # tries to restore distribution libs from workspace
+    - attach_workspace:
+        at: /tmp/repo
+
+    # logs in to docker hub then
+    # build and push image to docker hub
+    - run: |
+        docker login -u $DOCKER_LOGIN -p $DOCKER_PWD > /dev/null 2>&1
+        docker build -t $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:$CIRCLE_SHA1 .
+        if [ "${CIRCLE_BRANCH}" == "master" ]; then
+          docker tag $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:$CIRCLE_SHA1 $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:latest
+          docker push $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:latest
+          docker tag $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:$CIRCLE_SHA1 $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:$DIST_VERISON
+          docker push $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:$DIST_VERISON
+        else
+          docker tag $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:$CIRCLE_SHA1 $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:$DIST_VERISON-$CIRCLE_BRANCH
+          docker push $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME:$DIST_VERISON-$CIRCLE_BRANCH
+        fi
+
 workflows:
   version: 2
   build-deploy:
@@ -36,3 +70,12 @@ workflows:
     - test:
         requires:
         - build
+    - docker-build-push:
+        context: docker-hub-credentials
+        requires:
+        - test
+        filters:
+          branches:
+            only:
+            - develop
+            - master
