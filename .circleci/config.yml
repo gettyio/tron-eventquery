@@ -1,0 +1,38 @@
+version: 2
+jobs:
+  build:
+    docker:
+    - image: gettyio/maven
+    working_directory: /tmp/repo
+    steps:
+    - checkout
+
+    - run: mvn package -Dmaven.test.skip=true
+
+    # tries to persist distribution libs to workspace
+    - persist_to_workspace:
+        root: /tmp/repo
+        paths:
+        - target
+
+  test:
+    docker:
+    - image: gettyio/maven
+    working_directory: /tmp/repo
+    steps:
+    - checkout
+
+    # tries to restore distribution libs from workspace
+    - attach_workspace:
+        at: /tmp/repo
+    
+    - run: mvn test
+
+workflows:
+  version: 2
+  build-deploy:
+    jobs:
+    - build
+    - test:
+        requires:
+        - build
